@@ -8,9 +8,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"syscall"
+	"runtime"
 	"time"
-	"unsafe"
 )
 
 const (
@@ -19,7 +18,7 @@ const (
 )
 
 func main() {
-	imageURLs, err := getBingWallpaperUrl(0, 1, "zh-CN")
+	imageURLs, err := getBingWallpaperURL(0, 1, "zh-CN")
 	if err != nil {
 		fmt.Printf("get bing wallpaper url error: %v\n", err)
 		return
@@ -34,74 +33,44 @@ func main() {
 		fmt.Printf("download image error: %v\n", err)
 		return
 	}
-	err = setWallpaper(filename)
+	switch runtime.GOOS {
+	case "darwin", "windows":
+		err = setWallpaper(filename)
+	case "linux":
+		fmt.Println("not support linux")
+	default:
+		fmt.Println("unknown system")
+	}
 	if err != nil {
 		fmt.Printf("set wallpaper error: %v\n", err)
 		return
 	}
 }
 
-func setWallpaper(wallpaperPath string) error {
-	wallpaperPath, err := filepath.Abs(wallpaperPath)
-	if err != nil {
-		return fmt.Errorf("get abs path [%s] error: %v", wallpaperPath, err)
-	}
-
-	pathPtr, err := syscall.UTF16PtrFromString(wallpaperPath)
-	if err != nil {
-		return fmt.Errorf("get string ptr error: %v", err)
-	}
-
-	uiAction, uiParam, fWinIni := uint32(SPI_SETDESKWALLPAPER), uint32(0), uint32(SPIF_UPDATEINIFILE)
-
-	user32, err := syscall.LoadLibrary("User32.dll")
-	if err != nil {
-		return fmt.Errorf("load library error: %v", err)
-	}
-	defer syscall.FreeLibrary(user32)
-
-	systemParametersInfo, err := syscall.GetProcAddress(user32, "SystemParametersInfoW")
-	if err != nil {
-		return fmt.Errorf("get proc address error: %v", err)
-	}
-
-	r, _, sysErr := syscall.Syscall6(
-		uintptr(systemParametersInfo), 4,
-		uintptr(uiAction),
-		uintptr(uiParam),
-		uintptr(unsafe.Pointer(pathPtr)),
-		uintptr(fWinIni),
-		0, 0)
-	if r == 0 {
-		return fmt.Errorf("system call error: %v", sysErr)
-	}
-	return nil
-}
-
 type BingImageInfo struct {
-	StartDate     string   `json:startdate`
-	FullStartDate string   `json:fullstartdate`
-	EndDate       string   `json:enddate`
-	URL           string   `json:url`
-	URLBase       string   `json:urlbase`
-	Copyright     string   `json:copyright`
-	CopyrightLink string   `json:copyrightlink`
-	Title         string   `json:title`
-	Quiz          string   `json:quiz`
-	WP            bool     `json:wp`
-	Hash          string   `json:hsh`
-	Drk           int      `json:drk`
-	Top           int      `json:top`
-	Bot           int      `json:bot`
-	HS            []string `json:hs`
+	StartDate     string   `json:"startdate"`
+	FullStartDate string   `json:"fullstartdate"`
+	EndDate       string   `json:"enddate"`
+	URL           string   `json:"url"`
+	URLBase       string   `json:"urlbase"`
+	Copyright     string   `json:"copyright"`
+	CopyrightLink string   `json:"copyrightlink"`
+	Title         string   `json:"title"`
+	Quiz          string   `json:"quiz"`
+	WP            bool     `json:"wp"`
+	Hash          string   `json:"hsh"`
+	Drk           int      `json:"drk"`
+	Top           int      `json:"top"`
+	Bot           int      `json:"bot"`
+	HS            []string `json:"hs"`
 }
 
 type BingHPImageArchiveResponse struct {
-	Images   []BingImageInfo `json:images`
-	ToolTips interface{}     `json:tooltips` // 不使用
+	Images   []BingImageInfo `json:"images"`
+	ToolTips interface{}     `json:"tooltips"` // 不使用
 }
 
-func getBingWallpaperUrl(idx, num int, area string) ([]string, error) {
+func getBingWallpaperURL(idx, num int, area string) ([]string, error) {
 	downloadBaseURL := "https://cn.bing.com"
 	reqURLTmp := "https://cn.bing.com/HPImageArchive.aspx?format=js&idx=%d&n=%d&mkt=%s"
 	reqURL := fmt.Sprintf(reqURLTmp, idx, num, area)
